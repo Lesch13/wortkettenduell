@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wortkettenduell</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f0f1a;
+    color: #e0e0f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .game {
+    width: 480px;
+    padding: 32px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 4px;
+    background: linear-gradient(135deg, #a78bfa, #60a5fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 28px;
+  }
+
+  /* Score + Timer bar */
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .score-box {
+    text-align: center;
+  }
+
+  .score-box .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #6b7280;
+  }
+
+  .score-box .value {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+
+  .score-box.player .value { color: #a78bfa; }
+  .score-box.computer .value { color: #60a5fa; }
+
+  /* Timer */
+  .timer-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #timer-display {
+    font-size: 2rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s;
+  }
+
+  #timer-display.urgent { color: #f87171; animation: pulse 0.5s infinite alternate; }
+
+  @keyframes pulse { to { transform: scale(1.1); } }
+
+  #timer-bar-track {
+    width: 80px;
+    height: 5px;
+    background: #1f1f33;
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  #timer-bar {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #a78bfa, #60a5fa);
+    transition: width 0.1s linear, background 0.3s;
+  }
+
+  /* Word chain display */
+  .chain-wrap {
+    background: #1a1a2e;
+    border: 1px solid #2d2d4d;
+    border-radius: 14px;
+    padding: 16px;
+    min-height: 80px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .chain-empty {
+    color: #4b5563;
+    font-style: italic;
+    font-size: 0.9rem;
+    width: 100%;
+    text-align: center;
+  }
+
+  .word-chip {
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    position: relative;
+  }
+
+  .word-chip.human { background: #3b1fa8; color: #c4b5fd; }
+  .word-chip.cpu   { background: #1a3a6b; color: #93c5fd; }
+
+  .word-chip .arrow {
+    color: #4b5563;
+    font-size: 0.75rem;
+    margin-left: 6px;
+  }
+
+  /* Required letter hint */
+  .hint {
+    text-align: center;
+    margin-bottom: 16px;
+    font-size: 0.95rem;
+    color: #9ca3af;
+    min-height: 22px;
+  }
+
+  .hint strong {
+    color: #f9a8d4;
+    font-size: 1.3rem;
+    text-transform: uppercase;
+  }
+
+  /* Input area */
+  .input-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  #word-input {
+    flex: 1;
+    padding: 12px 16px;
+    background: #1a1a2e;
+    border: 2px solid #2d2d4d;
+    border-radius: 10px;
+    color: #e0e0f0;
+    font-size: 1.1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #word-input:focus { border-color: #a78bfa; }
+  #word-input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #submit-btn {
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  #submit-btn:hover:not(:disabled) { opacity: 0.85; }
+  #submit-btn:active:not(:disabled) { transform: scale(0.96); }
+  #submit-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Status message */
+  #status {
+    text-align: center;
+    font-size: 0.9rem;
+    min-height: 20px;
+    margin-bottom: 12px;
+    transition: color 0.3s;
+  }
+
+  #status.error { color: #f87171; }
+  #status.ok    { color: #6ee7b7; }
+  #status.info  { color: #93c5fd; }
+
+  /* Turn indicator */
+  .turn-indicator {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .turn-indicator.your-turn { color: #a78bfa; }
+  .turn-indicator.cpu-turn  { color: #60a5fa; }
+
+  /* CPU thinking dots */
+  .thinking::after {
+    content: '';
+    animation: dots 1s infinite;
+  }
+
+  @keyframes dots {
+    0%   { content: '.'; }
+    33%  { content: '..'; }
+    66%  { content: '...'; }
+  }
+
+  /* Game over overlay */
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  #overlay.show { display: flex; }
+
+  .overlay-box {
+    background: #1a1a2e;
+    border: 1px solid #2d2d4d;
+    border-radius: 20px;
+    padding: 40px 48px;
+    text-align: center;
+    max-width: 360px;
+  }
+
+  .overlay-box .big-emoji { font-size: 3.5rem; margin-bottom: 12px; }
+  .overlay-box h2 { font-size: 1.6rem; margin-bottom: 8px; }
+  .overlay-box p  { color: #9ca3af; margin-bottom: 24px; font-size: 0.95rem; }
+
+  .overlay-box .stats {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-bottom: 28px;
+  }
+
+  .overlay-box .stat-item .label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
+  .overlay-box .stat-item .val { font-size: 1.4rem; font-weight: 700; }
+
+  #play-again {
+    padding: 12px 32px;
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  #play-again:hover { opacity: 0.85; }
+
+  /* Difficulty selector */
+  .diff-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .diff-btn {
+    padding: 5px 14px;
+    border-radius: 99px;
+    border: 1px solid #2d2d4d;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .diff-btn.active {
+    background: #3b1fa8;
+    border-color: #7c3aed;
+    color: #c4b5fd;
+  }
+</style>
+</head>
+<body>
+
+<div class="game">
+  <h1>Wortkettenduell</h1>
+  <p class="subtitle">Du vs. Computer · Jedes Wort beginnt mit dem letzten Buchstaben des vorherigen</p>
+
+  <div class="diff-row">
+    <button class="diff-btn active" data-diff="easy">Leicht</button>
+    <button class="diff-btn" data-diff="medium">Mittel</button>
+    <button class="diff-btn" data-diff="hard">Schwer</button>
+  </div>
+
+  <div class="hud">
+    <div class="score-box player">
+      <div class="label">Du</div>
+      <div class="value" id="score-human">0</div>
+    </div>
+    <div class="timer-wrap">
+      <div id="timer-display">10</div>
+      <div id="timer-bar-track"><div id="timer-bar"></div></div>
+    </div>
+    <div class="score-box computer">
+      <div class="label">CPU</div>
+      <div class="value" id="score-cpu">0</div>
+    </div>
+  </div>
+
+  <div class="chain-wrap" id="chain">
+    <span class="chain-empty">Die Wortkette erscheint hier…</span>
+  </div>
+
+  <div class="hint" id="hint"></div>
+  <div class="turn-indicator" id="turn-label">Dein Zug</div>
+
+  <div class="input-row">
+    <input id="word-input" type="text" placeholder="Dein Wort eingeben…" autocomplete="off" />
+    <button id="submit-btn">→</button>
+  </div>
+
+  <div id="status"></div>
+</div>
+
+<div id="overlay">
+  <div class="overlay-box">
+    <div class="big-emoji" id="ov-emoji">🏆</div>
+    <h2 id="ov-title">Du hast gewonnen!</h2>
+    <p id="ov-reason"></p>
+    <div class="stats">
+      <div class="stat-item">
+        <div class="label">Deine Punkte</div>
+        <div class="val" id="ov-human" style="color:#a78bfa">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">CPU Punkte</div>
+        <div class="val" id="ov-cpu" style="color:#60a5fa">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">Wörter</div>
+        <div class="val" id="ov-words">0</div>
+      </div>
+    </div>
+    <button id="play-again">Nochmal spielen</button>
+  </div>
+</div>
+
+<script>
+// ── Word bank (German nouns) ─────────────────────────────────────────────────
+const WORDS = [
+  "Apfel","Löwe","Elefant","Tiger","Rose","Esel","Lampe","Ente","Eule","Affe",
+  "Ameise","Erdbeere","Elch","Adler","Auster","Alligator","Ananas","Arche",
+  "Blume","Berg","Baum","Birne","Biene","Buch","Busch","Ball","Brot","Boot",
+  "Dachs","Delphin","Drache","Dose","Dorf","Dunkel","Dame","Dach",
+  "Eiche","Eimer","Einhorn","Eis","Elster","Erle","Esche",
+  "Falke","Farn","Fels","Fisch","Flamingo","Fluss","Forelle","Fuchs","Feder",
+  "Gans","Garten","Gabel","Giraffe","Glocke","Gurke","Gras","Grille",
+  "Hase","Hamster","Herz","Himbeere","Hirsch","Holz","Hund","Hütte","Horn",
+  "Igel","Insel","Iris",
+  "Jaguar","Joghurt",
+  "Käfer","Katze","Kirsche","Krähe","Krokodil","Kürbis","Kuh","Koralle","Kiefer",
+  "Lachs","Laterne","Lemon","Leopard","Libelle","Lilie","Luchs",
+  "Maus","Marder","Meise","Melone","Möwe","Mohn","Mücke","Muschel",
+  "Nuss","Natter","Nelke","Nadel",
+  "Otter","Orchidee","Ochse",
+  "Panther","Papagei","Pinie","Pilz","Pferd","Pfau","Pinguin",
+  "Qualle","Quitsche",
+  "Rabe","Ratte","Reh","Rose","Robbe","Rotkehlchen",
+  "Schwan","Schlange","Schildkröte","Specht","Storch","Spinne","Seerose",
+  "Taube","Tanne","Tintenfisch","Tiger","Tulpe","Träne",
+  "Uhu","Ulme","Urchin",
+  "Veilchen","Vogel","Viper",
+  "Wal","Wespe","Wolf","Wurm","Wiesel",
+  "Xylophon",
+  "Yak",
+  "Zebra","Zeder","Ziege","Zikade","Zitrone"
+].map(w => w.toLowerCase());
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let chain = [];
+let usedWords = new Set();
+let scoreHuman = 0;
+let scoreCpu = 0;
+let isHumanTurn = true;
+let timerInterval = null;
+let timeLeft = 10;
+let maxTime = 10;
+let difficulty = 'easy'; // easy=10s, medium=6s, hard=3s
+let cpuDelay = { easy: 1800, medium: 1100, hard: 600 };
+
+const diffTimes = { easy: 10, medium: 6, hard: 3 };
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const chainEl      = document.getElementById('chain');
+const hintEl       = document.getElementById('hint');
+const turnLabel    = document.getElementById('turn-label');
+const inputEl      = document.getElementById('word-input');
+const submitBtn    = document.getElementById('submit-btn');
+const statusEl     = document.getElementById('status');
+const timerDisplay = document.getElementById('timer-display');
+const timerBar     = document.getElementById('timer-bar');
+const scoreHumanEl = document.getElementById('score-human');
+const scoreCpuEl   = document.getElementById('score-cpu');
+const overlay      = document.getElementById('overlay');
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function lastLetter() {
+  if (chain.length === 0) return null;
+  return chain[chain.length - 1].word.slice(-1);
+}
+
+function setStatus(msg, type = 'info') {
+  statusEl.textContent = msg;
+  statusEl.className = type;
+}
+
+function renderChain() {
+  if (chain.length === 0) {
+    chainEl.innerHTML = '<span class="chain-empty">Die Wortkette erscheint hier…</span>';
+    return;
+  }
+  chainEl.innerHTML = chain.map((entry, i) => {
+    const arrow = i < chain.length - 1 ? '<span class="arrow">→</span>' : '';
+    return `<span class="word-chip ${entry.by}">${entry.word}${arrow}</span>`;
+  }).join('');
+  chainEl.scrollLeft = chainEl.scrollWidth;
+}
+
+function updateHint() {
+  const ll = lastLetter();
+  if (ll) {
+    hintEl.innerHTML = `Nächstes Wort beginnt mit: <strong>${ll}</strong>`;
+  } else {
+    hintEl.innerHTML = 'Beginne mit einem beliebigen Wort';
+  }
+}
+
+function startTimer(onExpire) {
+  clearInterval(timerInterval);
+  timeLeft = maxTime;
+  updateTimerUI();
+  timerInterval = setInterval(() => {
+    timeLeft -= 0.1;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      updateTimerUI();
+      clearInterval(timerInterval);
+      onExpire();
+    } else {
+      updateTimerUI();
+    }
+  }, 100);
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+}
+
+function updateTimerUI() {
+  const secs = Math.ceil(timeLeft);
+  timerDisplay.textContent = secs;
+  const pct = (timeLeft / maxTime) * 100;
+  timerBar.style.width = pct + '%';
+  if (timeLeft <= 3) {
+    timerDisplay.classList.add('urgent');
+    timerBar.style.background = '#f87171';
+  } else {
+    timerDisplay.classList.remove('urgent');
+    timerBar.style.background = 'linear-gradient(90deg, #a78bfa, #60a5fa)';
+  }
+}
+
+// ── CPU logic ─────────────────────────────────────────────────────────────────
+function cpuChooseWord(startLetter) {
+  const candidates = WORDS.filter(w =>
+    w[0] === startLetter && !usedWords.has(w)
+  );
+  if (candidates.length === 0) return null;
+  // Harder difficulty prefers words ending with common letters
+  if (difficulty === 'hard') {
+    // Prefer words that end with rare letters to trip the player
+    const rare = ['q','x','y','ü','ö','ä'];
+    const tricky = candidates.filter(w => rare.includes(w.slice(-1)));
+    if (tricky.length > 0) return tricky[Math.floor(Math.random() * tricky.length)];
+  }
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+// ── Turn flow ─────────────────────────────────────────────────────────────────
+function humanTurn() {
+  isHumanTurn = true;
+  inputEl.disabled = false;
+  submitBtn.disabled = false;
+  inputEl.value = '';
+  inputEl.focus();
+  turnLabel.textContent = 'Dein Zug';
+  turnLabel.className = 'turn-indicator your-turn';
+  setStatus('', 'info');
+  startTimer(() => {
+    setStatus('Zeit abgelaufen! CPU bekommt einen Punkt.', 'error');
+    scoreCpu++;
+    scoreCpuEl.textContent = scoreCpu;
+    setTimeout(() => cpuTurn(), 800);
+  });
+}
+
+function cpuTurn() {
+  isHumanTurn = false;
+  inputEl.disabled = true;
+  submitBtn.disabled = true;
+  turnLabel.textContent = 'CPU denkt';
+  turnLabel.className = 'turn-indicator cpu-turn thinking';
+  stopTimer();
+
+  const ll = lastLetter();
+  const startLetter = ll || 'a';
+
+  setTimeout(() => {
+    const word = cpuChooseWord(startLetter);
+    if (!word) {
+      // CPU can't find a word — human wins the round
+      setStatus('CPU kann kein Wort finden! Du bekommst einen Punkt.', 'ok');
+      scoreHuman++;
+      scoreHumanEl.textContent = scoreHuman;
+      if (checkWin()) return;
+      setTimeout(() => humanTurn(), 1200);
+      return;
+    }
+    chain.push({ word, by: 'cpu' });
+    usedWords.add(word);
+    renderChain();
+    updateHint();
+    setStatus(`CPU spielt: "${word}"`, 'info');
+    setTimeout(() => humanTurn(), 600);
+  }, cpuDelay[difficulty]);
+}
+
+function submitWord(raw) {
+  const word = raw.trim().toLowerCase();
+  if (!word) return;
+
+  // Validate start letter
+  const ll = lastLetter();
+  if (ll && word[0] !== ll) {
+    setStatus(`"${word}" muss mit "${ll.toUpperCase()}" beginnen!`, 'error');
+    return;
+  }
+
+  // Duplicate check
+  if (usedWords.has(word)) {
+    setStatus(`"${word}" wurde schon verwendet!`, 'error');
+    return;
+  }
+
+  // Known-word check (soft — unknown words are allowed but flagged)
+  // We won't penalise unknown proper nouns; just continue
+  stopTimer();
+  chain.push({ word, by: 'human' });
+  usedWords.add(word);
+  scoreHuman++;
+  scoreHumanEl.textContent = scoreHuman;
+  renderChain();
+  updateHint();
+  setStatus('', 'info');
+
+  if (checkWin()) return;
+  cpuTurn();
+}
+
+function checkWin() {
+  if (scoreHuman >= 10) { endGame('human', 'Du hast 10 Punkte erreicht!'); return true; }
+  if (scoreCpu >= 10)   { endGame('cpu',   'CPU hat 10 Punkte erreicht!'); return true; }
+  return false;
+}
+
+function endGame(winner, reason) {
+  stopTimer();
+  inputEl.disabled = true;
+  submitBtn.disabled = true;
+
+  document.getElementById('ov-emoji').textContent  = winner === 'human' ? '🏆' : '🤖';
+  document.getElementById('ov-title').textContent  = winner === 'human' ? 'Du hast gewonnen!' : 'CPU hat gewonnen!';
+  document.getElementById('ov-reason').textContent = reason;
+  document.getElementById('ov-human').textContent  = scoreHuman;
+  document.getElementById('ov-cpu').textContent    = scoreCpu;
+  document.getElementById('ov-words').textContent  = chain.length;
+  overlay.classList.add('show');
+}
+
+function resetGame() {
+  chain = [];
+  usedWords = new Set();
+  scoreHuman = 0;
+  scoreCpu = 0;
+  scoreHumanEl.textContent = '0';
+  scoreCpuEl.textContent = '0';
+  maxTime = diffTimes[difficulty];
+  renderChain();
+  updateHint();
+  overlay.classList.remove('show');
+  humanTurn();
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+submitBtn.addEventListener('click', () => {
+  if (isHumanTurn) submitWord(inputEl.value);
+});
+
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && isHumanTurn) submitWord(inputEl.value);
+});
+
+document.getElementById('play-again').addEventListener('click', resetGame);
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    difficulty = btn.dataset.diff;
+    resetGame();
+  });
+});
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+maxTime = diffTimes[difficulty];
+updateTimerUI();
+humanTurn();
+</script>
+</body>
+</html>
